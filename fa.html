@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Wallet App</title>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- СБРОС И БАЗА --- */
+        :root {
+            --bg: #000000;
+            --glass: rgba(30, 30, 30, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #0A84FF; /* iOS Blue */
+            --accent-grad: linear-gradient(135deg, #0A84FF, #5E5CE6);
+            --danger: #FF453A;
+            --success: #32D74B;
+            --text: #ffffff;
+            --text-sec: rgba(255, 255, 255, 0.55);
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+        body {
+            background: var(--bg);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        /* --- ЖИВОЙ ФОН --- */
+        .background-blobs {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; overflow: hidden;
+        }
+        .blob {
+            position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.6;
+            animation: float 10s infinite ease-in-out;
+        }
+        .blob-1 { width: 300px; height: 300px; background: #5E5CE6; top: -50px; left: -50px; animation-delay: 0s; }
+        .blob-2 { width: 250px; height: 250px; background: #0A84FF; bottom: -50px; right: -50px; animation-delay: 2s; }
+        .blob-3 { width: 200px; height: 200px; background: #FF453A; top: 40%; left: 30%; opacity: 0.3; animation-delay: 4s; }
+
+        @keyframes float { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(20px, -20px) scale(1.1); } 100% { transform: translate(0, 0) scale(1); } }
+
+        /* --- КОНТЕЙНЕР ПРИЛОЖЕНИЯ --- */
+        .app-view {
+            width: 100%; max-width: 420px; height: 100%;
+            display: flex; flex-direction: column;
+            position: relative;
+            background: rgba(0,0,0,0.2); /* Slight tint */
+            backdrop-filter: blur(20px); /* Heavy blur override */
+        }
+
+        /* --- ЭЛЕМЕНТЫ ИНТЕРФЕЙСА --- */
+        .screen {
+            flex: 1; display: none; flex-direction: column;
+            padding: 20px; padding-top: 60px; padding-bottom: 40px;
+            animation: fadeIn 0.4s ease;
+        }
+        .screen.active { display: flex; }
+
+        h1 { font-size: 34px; font-weight: 700; margin: 0 0 10px 0; letter-spacing: -0.5px; }
+        h2 { font-size: 28px; font-weight: 700; margin-bottom: 20px; }
+        p { color: var(--text-sec); font-size: 17px; line-height: 1.4; margin-top: 0; }
+
+        /* Кнопки iOS Style */
+        .btn {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            width: 100%; padding: 18px;
+            border-radius: 14px;
+            font-size: 17px; font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.1s, background 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        .btn:active { transform: scale(0.96); background: rgba(255,255,255,0.15); }
+        .btn-primary { background: var(--accent); border: none; box-shadow: 0 4px 15px rgba(10, 132, 255, 0.4); }
+        .btn-primary:active { background: #0070e0; }
+        
+        /* Поля ввода */
+        .input-group { margin-bottom: 15px; }
+        input {
+            width: 100%; padding: 18px;
+            background: rgba(28, 28, 30, 0.8);
+            border: none; border-radius: 12px;
+            color: white; font-size: 17px;
+            transition: 0.3s;
+        }
+        input:focus { background: #2C2C2E; box-shadow: 0 0 0 2px var(--accent); }
+        input::placeholder { color: #666; }
+
+        /* Карточка */
+        .card-wrap { perspective: 1000px; margin-bottom: 30px; }
+        .credit-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(25px);
+            border-radius: 20px;
+            padding: 25px; height: 200px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            position: relative; overflow: hidden;
+        }
+        /* Блик на карте */
+        .credit-card::before {
+            content:''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shine 5s infinite;
+        }
+        @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }
+
+        .balance-label { font-size: 13px; color: var(--text-sec); text-transform: uppercase; letter-spacing: 1px; }
+        .balance-val { font-size: 42px; font-weight: 700; letter-spacing: -1px; margin-top: 5px; }
+
+        /* Список транзакций */
+        .tx-list {
+            flex: 1; overflow-y: auto;
+            margin: 0 -20px; padding: 0 20px; /* Bleed to edges */
+        }
+        .tx-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .tx-icon {
+            width: 44px; height: 44px; border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; margin-right: 15px;
+        }
+        .tx-content { flex: 1; }
+        .tx-title { font-weight: 600; font-size: 17px; margin-bottom: 4px; }
+        .tx-sub { font-size: 13px; color: var(--text-sec); }
+        .tx-amount { font-weight: 600; font-size: 17px; }
+        .plus { color: var(--success); }
+
+        /* Меню действий (Floating) */
+        .fab-menu {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+            margin-bottom: 20px;
+        }
+        .fab-btn {
+            background: rgba(28, 28, 30, 0.8); padding: 15px; border-radius: 16px;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+        }
+        .fab-btn i { font-size: 24px; color: var(--accent); }
+
+        /* Уведомление */
+        #notification {
+            position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-100px);
+            background: rgba(255,255,255,0.9); color: black;
+            padding: 12px 24px; border-radius: 30px;
+            font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 999; display: flex; align-items: center; gap: 10px;
+        }
+        #notification.show { transform: translateX(-50%) translateY(0); }
+
+        /* Анимации */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .hidden { display: none !important; }
+        
+        /* Модалка перевода */
+        .modal {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: #1C1C1E;
+            border-radius: 24px 24px 0 0;
+            padding: 25px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 100; box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+        }
+        .modal.open { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-modal { width: 30px; height: 30px; background: #3a3a3c; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #8e8e93; }
+
+    </style>
+</head>
+<body>
+
+<!-- ЖИВОЙ ФОН -->
+<div class="background-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+</div>
+
+<!-- УВЕДОМЛЕНИЕ -->
+<div id="notification"><i class="fa-solid fa-check-circle" style="color:var(--success)"></i> <span id="notif-text">Success</span></div>
+
+<div class="app-view">
+
+    <!-- 1. START SCREEN -->
+    <div id="scr-start" class="screen active" style="justify-content: flex-end;">
+        <div style="margin-bottom: auto; margin-top: 50px;">
+            <i class="fa-brands fa-apple" style="font-size: 60px; margin-bottom: 20px;"></i>
+            <h1>Wallet</h1>
+            <p>Безопасные переводы между друзьями.<br>Без комиссий. Мгновенно.</p>
+        </div>
+        
+        <button class="btn btn-primary" onclick="initClient()">
+            Войти в кошелек
+        </button>
+        <button class="btn" onclick="initAdmin()">
+            <i class="fa-solid fa-server"></i> Создать Сервер
+        </button>
+    </div>
+
+    <!-- 2. CONNECT SCREEN -->
+    <div id="scr-connect" class="screen">
+        <h2>Подключение</h2>
+        <p>Введите код, который отображается на телефоне-сервере.</p>
+        <input type="text" id="conn-code" placeholder="Код (например: a4f1...)">
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="connectPeer()">Подключиться</button>
+        <button class="btn" onclick="show('scr-start')">Назад</button>
+    </div>
+
+    <!-- 3. LOGIN SCREEN -->
+    <div id="scr-auth" class="screen">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div style="width: 80px; height: 80px; background: #2C2C2E; border-radius: 50%; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-user" style="font-size: 30px; color: #666;"></i>
+            </div>
+            <h2>Вход</h2>
+        </div>
+
+        <div style="background: rgba(28,28,30,0.5); padding: 5px; border-radius: 12px; display: flex; margin-bottom: 20px;">
+            <div id="tab-login" onclick="setMode('login')" style="flex:1; padding:10px; text-align:center; border-radius: 8px; background: #636366; font-weight:600; font-size:14px; transition:0.2s;">Вход</div>
+            <div id="tab-reg" onclick="setMode('reg')" style="flex:1; padding:10px; text-align:center; border-radius: 8px; color: #999; font-size:14px; transition:0.2s;">Создать</div>
+        </div>
+
+        <input type="text" id="auth-nick" placeholder="Никнейм" style="margin-bottom:10px;">
+        <input type="password" id="auth-pass" placeholder="Пароль">
+        
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="submitAuth()">Продолжить</button>
+    </div>
+
+    <!-- 4. DASHBOARD -->
+    <div id="scr-dash" class="screen" style="padding-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="font-weight: 700; font-size: 24px;">Мои карты</div>
+            <div style="width: 35px; height: 35px; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-user" style="font-size: 14px;"></i>
+            </div>
+        </div>
+
+        <div class="card-wrap">
+            <div class="credit-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <i class="fa-brands fa-apple" style="font-size: 24px;"></i>
+                    <i class="fa-solid fa-wifi" style="transform: rotate(90deg);"></i>
+                </div>
+                <div>
+                    <div class="balance-label">Баланс</div>
+                    <div class="balance-val" id="bal-val">$0</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-family: monospace; opacity: 0.7;">
+                    <span id="user-nick-card">USER</span>
+                    <span>•••• 4209</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="fab-menu">
+            <div class="fab-btn" onclick="openTransfer()">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Отправить</span>
+            </div>
+            <div class="fab-btn" onclick="notify('Скоро...')">
+                <i class="fa-solid fa-qrcode"></i>
+                <span>QR Код</span>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom: 10px;">История</h3>
+        <div class="tx-list" id="tx-list">
+            <!-- Items injected by JS -->
+        </div>
+    </div>
+
+    <!-- 5. SERVER ADMIN -->
+    <div id="scr-admin" class="screen">
+        <h2 style="color: var(--success)">Сервер Активен</h2>
+        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 16px; text-align: center; margin-bottom: 30px;">
+            <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 10px;">КОД ПРИГЛАШЕНИЯ</div>
+            <div id="server-id-txt" onclick="copyId()" style="font-size: 24px; font-weight: 700; font-family: monospace; letter-spacing: 2px;">...</div>
+        </div>
+
+        <h3>База данных</h3>
+        <div id="adm-list" class="tx-list"></div>
+
+        <div style="background: #1C1C1E; padding: 15px; border-radius: 16px; margin-top: auto;">
+            <input type="text" id="adm-nick" placeholder="Никнейм" style="margin-bottom: 10px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <button class="btn" style="margin:0; font-size:14px;" onclick="admAdd(100)">+100</button>
+                <button class="btn" style="margin:0; font-size:14px;" onclick="admAdd(1000)">+1k</button>
+                <button class="btn" style="margin:0; font-size:14px;" onclick="admAdd(5000)">+5k</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TRANSFER -->
+    <div id="modal-transfer" class="modal">
+        <div class="modal-header">
+            <h3>Перевод</h3>
+            <div class="close-modal" onclick="closeTransfer()"><i class="fa-solid fa-xmark"></i></div>
+        </div>
+        <input type="text" id="tx-to" placeholder="Ник получателя">
+        <br><br>
+        <input type="number" id="tx-sum" placeholder="Сумма ($)">
+        <br><br>
+        <button class="btn btn-primary" onclick="sendTx()">Отправить</button>
+    </div>
+
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+    let peer, conn, myNick, authMode='login';
+    let db={users:{}}, conns={};
+
+    function notify(msg) {
+        const n = $('notification'); $('notif-text').innerText = msg; n.classList.add('show');
+        if(navigator.vibrate) navigator.vibrate(50);
+        setTimeout(() => n.classList.remove('show'), 3000);
+    }
+    
+    function show(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        $(id).classList.add('active');
+    }
+
+    // --- CLIENT ---
+    function initClient() {
+        const s = localStorage.getItem('ios_host');
+        if(s) { $('conn-code').value=s; connectPeer(); }
+        else show('scr-connect');
+    }
+
+    function connectPeer() {
+        const id = $('conn-code').value.trim();
+        if(!id) return notify('Введите код!');
+        localStorage.setItem('ios_host', id);
+        
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(id);
+            conn.on('open', () => { show('scr-auth'); notify('Подключено'); });
+            conn.on('data', handleClient);
+            conn.on('close', () => { alert('Разрыв соединения'); location.reload(); });
+            conn.on('error', () => { notify('Ошибка подключения'); show('scr-connect'); });
+        });
+    }
+
+    function setMode(m) {
+        authMode = m;
+        $('tab-login').style.background = m==='login'?'#636366':'transparent';
+        $('tab-login').style.color = m==='login'?'white':'#999';
+        $('tab-reg').style.background = m==='reg'?'#636366':'transparent';
+        $('tab-reg').style.color = m==='reg'?'white':'#999';
+    }
+
+    function submitAuth() {
+        const n = $('auth-nick').value.trim();
+        const p = $('auth-pass').value.trim();
+        if(!n || !p) return notify('Заполните поля');
+        conn.send({type:'AUTH', mode:authMode, nick:n, pass:p});
+    }
+
+    function handleClient(d) {
+        if(d.type==='ERR') notify(d.msg);
+        if(d.type==='OK') {
+            myNick = d.nick;
+            $('user-nick-card').innerText = myNick.toUpperCase();
+            show('scr-dash');
+            updateUI(d.u);
+        }
+        if(d.type==='UPD') { updateUI(d.u); notify('Баланс обновлен'); }
+    }
+
+    function updateUI(u) {
+        $('bal-val').innerText = '$' + u.balance.toLocaleString();
+        
+        let h = '';
+        if(u.history.length === 0) h = '<div style="text-align:center;color:#666;margin-top:20px">Нет операций</div>';
+        
+        u.history.forEach(t => {
+            const isP = t.type === '+';
+            h += `
+            <div class="tx-item">
+                <div style="display:flex;align-items:center">
+                    <div class="tx-icon" style="background:${isP?'rgba(50,215,75,0.2)':'rgba(255,255,255,0.1)'}; color:${isP?'#32D74B':'white'}">
+                        <i class="fa-solid ${isP?'fa-arrow-down':'fa-arrow-up'}"></i>
+                    </div>
+                    <div>
+                        <div class="tx-title">${t.who}</div>
+                        <div class="tx-sub">${t.time}</div>
+                    </div>
+                </div>
+                <div class="tx-amount ${isP?'plus':''}">${isP?'+':'-'}$${t.amount}</div>
+            </div>`;
+        });
+        $('tx-list').innerHTML = h;
+    }
+
+    function openTransfer() { $('modal-transfer').classList.add('open'); }
+    function closeTransfer() { $('modal-transfer').classList.remove('open'); }
+    
+    function sendTx() {
+        const to = $('tx-to').value.trim();
+        const sum = $('tx-sum').value;
+        if(!to || !sum) return notify('Ошибка ввода');
+        conn.send({type:'TX', from:myNick, to, amount:sum});
+        closeTransfer();
+        $('tx-sum').value = '';
+    }
+
+    // --- ADMIN ---
+    function initAdmin() {
+        if(prompt('Пароль:') !== '1691') return notify('Неверно');
+        show('scr-admin');
+        const s = localStorage.getItem('ios_db');
+        if(s) db = JSON.parse(s);
+        renderAdm();
+
+        peer = new Peer();
+        peer.on('open', id => $('server-id-txt').innerText = id);
+        peer.on('connection', c => {
+            c.on('data', d => handleServer(c, d));
+        });
+    }
+
+    function handleServer(c, d) {
+        if(d.type==='AUTH') {
+            const {mode, nick, pass} = d;
+            if(mode==='reg') {
+                if(db.users[nick]) return c.send({type:'ERR', msg:'Занято'});
+                db.users[nick] = { pass, balance:0, history:[] };
+                save();
+            } else {
+                if(!db.users[nick] || db.users[nick].pass !== pass) return c.send({type:'ERR', msg:'Ошибка'});
+            }
+            conns[nick] = c;
+            c.send({type:'OK', nick, u:db.users[nick]});
+            renderAdm();
+        }
+        if(d.type==='TX') {
+            const {from, to, amount} = d;
+            const amt = parseFloat(amount);
+            if(!db.users[to] || db.users[from].balance < amt) return;
+            
+            const t = new Date().toLocaleTimeString().slice(0,5);
+            db.users[from].balance -= amt;
+            db.users[to].balance += amt;
+            db.users[from].history.unshift({type:'-', amount:amt, who:to, time:t});
+            db.users[to].history.unshift({type:'+', amount:amt, who:from, time:t});
+            save();
+            
+            if(conns[from]) conns[from].send({type:'UPD', u:db.users[from]});
+            if(conns[to]) conns[to].send({type:'UPD', u:db.users[to]});
+        }
+    }
+
+    function admAdd(n) {
+        const u = $('adm-nick').value.trim();
+        if(db.users[u]) {
+            db.users[u].balance += n;
+            db.users[u].history.unshift({type:'+', amount:n, who:'Deposit', time:'Now'});
+            save();
+            if(conns[u]) conns[u].send({type:'UPD', u:db.users[u]});
+            renderAdm();
+            notify('Выдано');
+        }
+    }
+
+    function renderAdm() {
+        let h=''; for(let u in db.users) h+=`<div style="padding:10px;border-bottom:1px solid #333;display:flex;justify-content:space-between"><span>${u}</span><span>$${db.users[u].balance}</span></div>`;
+        $('adm-list').innerHTML = h;
+    }
+    
+    function save() { localStorage.setItem('ios_db', JSON.stringify(db)); }
+    function copyId() { navigator.clipboard.writeText($('server-id-txt').innerText); notify('Скопировано'); }
+
+</script>
+</body>
+</html>
